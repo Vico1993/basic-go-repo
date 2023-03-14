@@ -10,4 +10,4 @@ Template for my go template ( tired to copy past )
 go mod init <project_name>
 ```
 
-2.
+2. No second steps!
