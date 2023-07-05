@@ -1,27 +1,25 @@
-name: CI
+name: Main
 
 on:
-    pull_request:
+    push:
         branches:
             - main
         paths:
             - "**.go"
-            - "**.json"
 
 env:
-    TESTCOVERAGE_THRESHOLD: 90
     GO_VERSION: 1.20.2
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-    deps:
-        name: Ensure Deps
+    build:
+        name: build
         runs-on: ubuntu-latest
         env:
             GOFLAGS: -mod=readonly
 
         steps:
-            - name: Set up Go`
+            - name: Set up Go
               uses: actions/setup-go@v4
               with:
                   go-version: ${{ env.GO_VERSION }}
@@ -35,9 +33,12 @@ jobs:
             - name: Build Deps
               run: go mod download
 
+            - name: Ensure project compiles
+              run: make build
+
     test:
         name: Test
-        needs: deps
+        needs: build
         runs-on: ${{ matrix.os }}
         strategy:
             # Fail fast is disabled because there are Go version specific features and tests
@@ -84,66 +85,21 @@ jobs:
               with:
                   parallel-finished: true
 
-    lint:
-        name: Lint
+    release:
+        name: Create Release
         runs-on: ubuntu-latest
-        needs: deps
-        env:
-            GOFLAGS: -mod=readonly
-
+        needs:
+            - build
         steps:
-            - name: Set up Go
-              uses: actions/setup-go@v4
-              with:
-                  go-version: ${{ env.GO_VERSION }}
+            - uses: zendesk/checkout@v3
 
-            - name: Checkout code
-              uses: actions/checkout@v3
-
-            - name: Lint
-              uses: golangci/golangci-lint-action@v3
-              with:
-                  version: latest
-
-            - name: Vet
+            - name: Get Manifest version
+              id: manifest-version
               run: |
-                  go vet ./...
+                  echo "Reading manifest.json from ./manifest.json"
+                  PACKAGE_VERSION=$(cat ./manifest.json | jq '.version' | tr -d '"')
+                  echo "current-version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
 
-    build:
-        name: build
-        needs: deps
-        runs-on: ubuntu-latest
-        env:
-            GOFLAGS: -mod=readonly
-
-        steps:
-            - name: Set up Go
-              uses: actions/setup-go@v4
-              with:
-                  go-version: ${{ env.GO_VERSION }}
-
-            - name: Checkout code
-              uses: actions/checkout@v3
-
-            - name: Ensure project compiles
-              run: make build
-
-    version:
-        name: Update version
-        needs: build
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v3
-
-            - name: Bump version
-              env:
-                  ACTIONS_STEP_DEBUG: true
-                  ACTIONS_RUNNER_DEBUG: true
-              uses: apomalyn/bump-version-using-labels@v1.5.0
-              with:
-                  file_path: "manifest.json"
-                  major_label: "#major"
-                  minor_label: "#minor"
-                  patch_label: "#patch"
-                  use_tag_as_ref: true
+            - name: Create release
+              run: |
+                  gh release create ${{ steps.manifest-version.outputs.current-version }} -p --generate-notes

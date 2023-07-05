@@ -1,8 +1,11 @@
-name: goreleaser
+name: Release
 
 on:
     release:
         types: [published]
+
+env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
     goreleaser:
@@ -23,5 +26,3 @@ jobs:
                   version: latest
                   args: release --clean
                   workdir: ./internal
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
